@@ -21,8 +21,10 @@ This project implements an autonomous agent skill following the [agentskills.io]
   - `references/` - Risk rubric, JSON contract, capsule schema, and evidence contract.
   - `examples/` - Verified sample capsules.
   - `tests/` - Comprehensive unit and regression test suite.
-- `scripts/` - Root CLI utilities (including `build_report.py`).
+- `scripts/` - Root CLI utilities (`scan_usage.py`, `collect_metadata.py`, `risk_indicators.py`, `build_report.py`).
 - `tests/` - Top-level test runner suite.
+- `evidence/` - JSON contracts and repository baseline fixtures.
+- `docs/problem-selection.md` - Explains how to select a real candidate dependency.
 
 ## Run End-to-End Pipeline
 
@@ -31,10 +33,20 @@ This project implements an autonomous agent skill following the [agentskills.io]
 python dependency-exit-capsule/scripts/run_pipeline.py --repo target/LinkWatch --dependency Jinja2
 ```
 
-## Generate Visual HTML Report Directly
+## Run Individual Scripts Against Target Repository
 
 ```bash
-python dependency-exit-capsule/scripts/build_report.py --capsule capsule_output/capsule.json --out capsule_output/report.html
+python scripts/scan_usage.py --repo target/LinkWatch --dependency Jinja2
+python scripts/collect_metadata.py --repo target/LinkWatch --dependency Jinja2 --ecosystem pypi
+python scripts/risk_indicators.py
+python scripts/build_report.py --capsule capsule_output/capsule.json --out capsule_output/report.html
 ```
 
-The report generator accepts both full pipeline capsules and partial capsules, escaping repository content and visually separating `[OBSERVED]`, `[EXECUTED]`, and `[AI-SUGGESTED]` evidence tags. Open `report.html` directly in any browser—no server, CDN, or external packages required.
+Use `--import-name` when a package name differs from its import name, for
+example `--dep pyyaml --import-name yaml`. The tools are offline-capable for
+scanning; registry metadata failures are recorded in the output rather than
+hidden.
+
+## Visual HTML Report
+
+The report generator accepts both full pipeline capsules and partial capsules, escaping repository content and visually separating `[OBSERVED]`, `[EXECUTED]`, and `[AI-SUGGESTED]` evidence tags. Open `report.html` locally after generation; no server, CDN, or extra package is required.
