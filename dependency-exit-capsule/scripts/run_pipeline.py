@@ -207,7 +207,8 @@ def main():
     for name, ok in results.items():
         status = "OK" if ok else ("SKIPPED" if args.dry_run else "FAILED/SKIPPED")
         print("  %-12s %s" % (name, status))
-    print("  %-12s %s" % ("capsule", "OK" if capsule_ok else "FAILED"))
+        capsule_status = "SKIPPED (dry run)" if args.dry_run else ("OK" if capsule_ok else "FAILED")
+    print("  %-12s %s" % ("capsule", capsule_status))
     print("=" * 60)
 
     if capsule_ok:
