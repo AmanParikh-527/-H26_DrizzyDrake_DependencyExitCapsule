@@ -72,14 +72,11 @@ dependency-exit-capsule/
 Run the full end-to-end pipeline against the target repository:
 
 ```bash
-# 1. Clone LinkWatch (target repo) if not already cloned
-git clone https://github.com/rishrek/LinkWatch.git ../LinkWatch
+# 1. Target repo LinkWatch is already located in the target folder:
+#    target/LinkWatch
 
-# 2. Navigate to dependency-exit-capsule
-cd dependency-exit-capsule
-
-# 3. Run the orchestration pipeline
-python scripts/run_pipeline.py --repo ../LinkWatch --dependency pydantic --output ./capsule_output
+# 2. Run the orchestration pipeline:
+python scripts/run_pipeline.py --repo target/LinkWatch --dependency pydantic --output ../capsule_output
 ```
 
 Inspect the generated artifacts in `./capsule_output/`:

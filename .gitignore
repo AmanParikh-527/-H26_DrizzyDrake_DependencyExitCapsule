@@ -1,17 +1,31 @@
 # Byte-compiled / optimized / cache
 __pycache__/
 *.py[cod]
-*.pyc
-*.class
+*$py.class
 .pytest_cache/
 
 # Environments and Secrets
 .env
 .env.local
 .venv/
+venv/
+ENV/
 
-# Build & Run Artifacts
-target/
+# Scratch & Temporary directories
 out/
-capsule_output/
-intermediate/
+scratch/
+*.log
+
+# Keep target folder structure, ignore arbitrary cloned target repos except LinkWatch sample
+dependency-exit-capsule/target/*
+!dependency-exit-capsule/target/.gitkeep
+!dependency-exit-capsule/target/README.md
+!dependency-exit-capsule/target/LinkWatch/
+!dependency-exit-capsule/target/LinkWatch/**
+
+# Keep capsule_output directory structure
+capsule_output/*
+!capsule_output/.gitkeep
+!capsule_output/intermediate/
+capsule_output/intermediate/*
+!capsule_output/intermediate/.gitkeep

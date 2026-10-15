@@ -6,9 +6,10 @@ Maintenance evidence pipeline and Agent Skill (`dependency-exit-capsule`) for de
 
 This project implements an autonomous agent skill following the [agentskills.io](https://agentskills.io) standard to analyze dependencies, scan actual usage across codebases, run test suites, query open-weight LLMs, and produce a fully tagged **Dependency Exit Capsule** (JSON, Markdown, and self-contained interactive HTML).
 
-## Structure
+## Project Structure
 
 - `dependency-exit-capsule/` - Complete Agent Skill package:
+  - `target/` - **Target folder** where the user places their target GitHub repository (e.g., `dependency-exit-capsule/target/LinkWatch`).
   - `SKILL.md` - Agent skill definition and interface specification.
   - `scripts/scan_usage.py` - AST/grep detector for imports, calls, decorators, and configurations.
   - `scripts/collect_metadata.py` - Manifest and PyPI registry metadata collector.
@@ -18,87 +19,104 @@ This project implements an autonomous agent skill following the [agentskills.io]
   - `scripts/build_capsule.py` - Structured capsule assembler (`capsule.json` and `capsule.md`).
   - `scripts/build_report.py` - Offline, self-contained interactive HTML visual report generator (`report.html`).
   - `scripts/run_pipeline.py` - End-to-end orchestrator running all 6 steps.
+  - `scripts/trial_patch.py` - Trial patch sandbox execution.
+  - `scripts/license_check.py` - Conservative license compatibility screener.
+  - `scripts/red_team.py` - Independent adversarial auditor.
+  - `scripts/generate_diagram.py` - Mermaid blast radius diagram generator.
   - `references/` - Risk rubric, JSON contract, capsule schema, and evidence contract.
   - `examples/` - Verified sample capsules.
   - `tests/` - Comprehensive unit and regression test suite.
-- `scripts/` - Root CLI utilities:
-  - `scan_usage.py` - AST/grep detector for imports and usages.
-  - `collect_metadata.py` - Manifest and registry metadata collector.
-  - `risk_indicators.py` - Applies risk rubric rules.
-  - `analyze_migration.py` - Generates initial migration recommendations.
-  - `red_team.py` - Independently audits migration plans against observed usage.
-  - `trial_patch.py` - Tries model-proposed lines in a temporary copy and runs tests.
-  - `generate_diagram.py` - Creates Mermaid blast radius diagrams.
-  - `license_check.py` - Applies conservative license screening rules.
-  - `build_capsule.py` - Markdown and JSON capsule assembler.
-  - `build_report.py` - Self-contained HTML report generator.
-  - `run_all.py` - Multi-stage pipeline runner.
+- `capsule_output/` - **Output folder** created next to `dependency-exit-capsule`:
+  - `capsule.json` - Machine-readable structured capsule with every field tagged.
+  - `capsule.md` - Tagged human-readable Markdown report.
+  - `report.html` - Self-contained, interactive visual HTML dashboard.
+  - `intermediate/` - Step-by-step intermediate reports (`usage_report.json`, `metadata_report.json`, `test_results.json`, `ai_analysis.json`).
+- `scripts/` - Root CLI utilities (mirrored runners for local development).
 - `tests/` - Top-level test runner suite (including `test_report.py` and `test_validation.py`).
-- `evidence/` - JSON contracts and repository baseline fixtures.
-- `docs/problem-selection.md` - Explains how to select a real candidate dependency.
+- `Dockerfile` - Container specification for DigitalOcean App Platform and Droplets.
+- `docker-compose.yml` - Multi-container / local Docker composition.
+- `.do/app.yaml` - DigitalOcean App Platform 1-click deployment specification.
+- `app.py` - Production HTTP server for DigitalOcean serving the visual report and health endpoint.
+
+---
+
+## DigitalOcean Deployment
+
+This project is fully containerized and deployment-ready for **DigitalOcean App Platform** and **DigitalOcean Droplets**.
+
+### 1. DigitalOcean App Platform (Recommended)
+
+1. Connect your repository to **DigitalOcean App Platform**.
+2. DigitalOcean will automatically detect the root `Dockerfile` and `.do/app.yaml`.
+3. Set your environment variables in the App Platform settings:
+   - `GROQ_API_KEY`: Your Groq API key for high-speed open-weight LLM inference.
+   - `PORT`: `8080` (default).
+4. Deploy! The service exposes:
+   - `GET /` — Serves the interactive `capsule_output/report.html`.
+   - `GET /health` — Health check endpoint for zero-downtime health monitoring.
+   - `GET /capsule.json` & `GET /capsule.md` — Machine-readable outputs.
+
+### 2. DigitalOcean Droplet (Docker)
+
+Deploy using Docker on any Ubuntu Droplet:
+
+```bash
+# Clone the repository
+git clone https://github.com/AmanParikh-527/AgentSkill-Hermes.git
+cd AgentSkill-Hermes
+
+# Configure API key
+cp .env.example .env
+nano .env
+
+# Build and run with Docker Compose
+docker compose up -d --build
+
+# View container logs
+docker compose logs -f
+```
+
+The server will be live at `http://<your-droplet-ip>:8080`.
+
+---
 
 ## Run End-to-End Pipeline
 
+To execute the pipeline against a target repository:
+
 ```bash
-# Run all 6 steps end-to-end against a target repository
-python dependency-exit-capsule/scripts/run_pipeline.py --repo target/LinkWatch --dependency Jinja2
+# 1. Place your target repository in the target folder:
+#    dependency-exit-capsule/target/<your-repo>
+#    (A sample 'LinkWatch' target is provided out of the box)
+
+# 2. Run the end-to-end pipeline:
+python dependency-exit-capsule/scripts/run_pipeline.py \
+  --repo dependency-exit-capsule/target/LinkWatch \
+  --dependency Jinja2 \
+  --output ./capsule_output
 ```
 
-## Run Individual Scripts Against Target Repository
+All reports (`capsule.json`, `capsule.md`, `report.html`, and `intermediate/*`) will be written to `capsule_output/`.
+
+### Run Individual Scripts
 
 ```bash
-python scripts/scan_usage.py --repo target/LinkWatch --dependency Jinja2
-python scripts/collect_metadata.py --repo target/LinkWatch --dependency Jinja2 --ecosystem pypi
+python scripts/scan_usage.py --repo dependency-exit-capsule/target/LinkWatch --dependency Jinja2
+python scripts/collect_metadata.py --repo dependency-exit-capsule/target/LinkWatch --dependency Jinja2 --ecosystem pypi
 python scripts/risk_indicators.py
 python scripts/build_report.py --capsule capsule_output/capsule.json --out capsule_output/report.html
 ```
 
-Use `--import-name` when a package name differs from its import name, for
-example `--dep pyyaml --import-name yaml`. The tools are offline-capable for
-scanning; registry metadata failures are recorded in the output rather than
-hidden.
+---
 
-## Visual HTML Report
+## Testing & Quality Assurance
 
-The report generator accepts both full pipeline capsules and partial capsules, escaping repository content and visually separating `[OBSERVED]`, `[EXECUTED]`, and `[AI-SUGGESTED]` evidence tags. Open `report.html` locally after generation; no server, CDN, or extra package is required.
-
-## Complete Validation Pipeline
-
-Python 3.9+ is required; the pipeline itself uses only the standard library.
-Configure a local OpenAI-compatible chat endpoint (for example, a local server
-with its model already loaded):
+Run both test suites to verify full functionality:
 
 ```bash
-export CAPSULE_MODEL=your-local-model
-export CAPSULE_API_BASE=http://127.0.0.1:11434/v1
-# Set CAPSULE_API_KEY only if the endpoint requires authentication.
-# CAPSULE_TIMEOUT controls each model request's timeout (default: 120 seconds).
-
-python scripts/run_all.py \
-  --repo /path/to/repo --dep requests --ecosystem pypi \
-  --replacement httpx \
-  --test-command 'python -m pytest -q' --test-timeout 120
-```
-
-Outputs are `capsule/exit-capsule.md`, `capsule/capsule.json`, and
-`capsule/report.html`. Use `--evidence-dir` and `--capsule-dir` to choose other
-directories. The Markdown embeds the Mermaid diagram; the self-contained HTML
-includes its source without requiring an online renderer.
-
-Each validation stage can also run independently:
-
-```bash
-python scripts/red_team.py
-python scripts/trial_patch.py --repo /path/to/repo --test-command 'python -m pytest -q'
-python scripts/generate_diagram.py
-python scripts/license_check.py --repo /path/to/repo
-python scripts/build_capsule.py
-python scripts/build_report.py
-```
-
-## Tests
-
-```bash
+# Run root test suite
 python -m unittest discover -s tests -v
+
+# Run agent skill test suite
 python -m unittest discover -s dependency-exit-capsule/tests -v
 ```
