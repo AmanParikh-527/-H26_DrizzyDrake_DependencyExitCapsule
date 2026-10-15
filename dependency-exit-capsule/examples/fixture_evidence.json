@@ -1,0 +1,26 @@
+{
+  "dependency": "request",
+  "version": "2.88.2",
+  "ecosystem": "npm",
+  "usages": [
+    {"file": "src/http/client.js", "line": 3, "snippet": "const request = require('request');", "kind": "import"},
+    {"file": "src/http/client.js", "line": 21, "snippet": "request.get({ url, json: true }, (err, res, body) => {", "kind": "call"},
+    {"file": "src/services/github.js", "line": 1, "snippet": "const request = require('request');", "kind": "import"},
+    {"file": "src/services/github.js", "line": 40, "snippet": "request.post({ url, headers, body: payload, json: true }, cb);", "kind": "call"},
+    {"file": "scripts/download.js", "line": 5, "snippet": "request(url).pipe(fs.createWriteStream(dest));", "kind": "call"}
+  ],
+  "metadata": {
+    "license": "Apache-2.0",
+    "latest_version": "2.88.2",
+    "last_release": "2020-02-11",
+    "deprecated": true,
+    "deprecation_message": "request has been deprecated, see https://github.com/request/request/issues/3142",
+    "evidence_tag": "OBSERVED"
+  },
+  "risk_indicators": [
+    {"name": "deprecated", "value": true, "evidence_tag": "OBSERVED"},
+    {"name": "days_since_last_release", "value": 2000, "evidence_tag": "OBSERVED"},
+    {"name": "usage_count", "value": 5, "evidence_tag": "OBSERVED"}
+  ],
+  "evidence_tag": "OBSERVED"
+}
