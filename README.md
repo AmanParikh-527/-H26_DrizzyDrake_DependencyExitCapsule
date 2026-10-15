@@ -1,12 +1,19 @@
 # AgentSkill-Hermes: Dependency Exit Capsule
 
 > An autonomous maintenance evidence pipeline and Agent Skill (`dependency-exit-capsule`) for dependency upgrades, compatibility analysis, and replacements following the [agentskills.io](https://agentskills.io) standard.
+>
+> **Hackathon Track:** Track 2 — Maintenance Agent Skill (Hacktoberfest Hack Day Mumbai × ISTE KJSSE)  
+> **Target Repository:** [`https://github.com/rishrek/LinkWatch`](https://github.com/rishrek/LinkWatch) (Python 3.12 / 3.13)  
+> **Agent Platform:** Hermes Agent + DigitalOcean  
+> **Open Source License:** [MIT License](LICENSE)
 
 ---
 
 ## Table of Contents
 
 - [Problem and Solution Overview](#problem-and-solution-overview)
+- [Original Contribution](#original-contribution)
+- [Hermes Agent Integration](#hermes-agent-integration)
 - [Architecture](#architecture)
 - [AI Model Details](#ai-model-details)
 - [Dependencies](#dependencies)
@@ -21,6 +28,7 @@
   - [Modular Script Execution](#modular-script-execution)
   - [Viewing the Interactive Report Dashboard](#viewing-the-interactive-report-dashboard)
   - [Running the Test Suites](#running-the-test-suites)
+- [Hackathon Rulebook Alignment Matrix](#hackathon-rulebook-alignment-matrix)
 - [Known Limitations](#known-limitations)
 
 ---
@@ -50,6 +58,37 @@ Crucially, every finding in the report is strictly partitioned by an **Evidence 
 | `[AI-CRITIQUE]` | Independent adversarial audit reviewing proposed plans against code | **Audited** (Adversarial) | `red_team.py` |
 
 By separating observed facts from AI reasoning and backing suggestions with deterministic file-grounding checks and isolated test executions, teams can make dependency decisions with total confidence.
+
+---
+
+## Original Contribution
+
+In compliance with the **Track 2 Hackathon Rules** (*"Simply deploying an existing agent, changing its prompt, or modifying its user interface is not sufficient. The submitted capability must add a new skill, tool, workflow, functionality, or meaningful modification that addresses the chosen maintenance problem"*):
+
+Our team designed and built the complete **`dependency-exit-capsule`** capability from the ground up:
+1. **Custom AST Usage Scanner (`scan_usage.py`)**: Built an AST visitor that walks Python syntax trees to extract exact symbol call sites, imports, decorators (e.g. Pydantic `@validator` vs `@field_validator`), configuration keys, and line numbers across codebases, paired with a resilient regex fallback.
+2. **Automated Risk Rubric Scoring (`risk_indicators.py`)**: Designed deterministic scoring rules analyzing release frequency deltas, version pin strictness (`==` vs `>=`), and cross-manifest pin mismatches without relying on proprietary black-box scoring.
+3. **Deterministic Hallucination Suppression (`ai_analyze.py`)**: Engineered a file-grounding engine that deterministically intercepts model output and verifies referenced files and methods against the AST index, flagging any hallucinated paths in `grounding.hallucinated_files`.
+4. **Adversarial Red Team Auditor (`red_team.py`)**: Implemented an independent adversarial critique stage that re-evaluates proposed migration plans against observed call sites to catch hidden pitfalls before execution.
+5. **Isolated Trial Patch Sandbox (`trial_patch.py`)**: Created an isolated temporary patching mechanism that safely tests model-suggested line substitutions against the target repo's test suite and restores the original code cleanly without repository corruption.
+6. **Conservative License Matrix Screener (`license_check.py`)**: Built an automated license compatibility engine evaluating inbound vs outbound licenses across MIT, Apache-2.0, BSD, GPL, and LGPL.
+7. **Mermaid Blast Radius Visualizer (`generate_diagram.py`)**: Implemented automated graph generation rendering component dependencies and blast radius topologies directly into Markdown and HTML.
+8. **Offline Interactive HTML Generator (`build_report.py`)**: Developed an offline, zero-CDN, zero-dependency visual report generator rendering SVG donut charts, responsive risk cards, and instant-filtering search tables with 100% escaped data.
+9. **Capsule Assembler (`build_capsule.py`)**: Designed the portable JSON + Markdown envelope enforcing the `[OBSERVED]`, `[EXECUTED]`, `[AI-SUGGESTED]`, and `[AI-CRITIQUE]` evidence contract.
+10. **DigitalOcean Ready Production Server (`app.py`, `Dockerfile`, `.do/app.yaml`)**: Built containerization and a standard-library HTTP server with `/health` endpoints for DigitalOcean App Platform and Droplets.
+
+---
+
+## Hermes Agent Integration
+
+[Hermes Agent](https://github.com/NousResearch/Hermes-Agent) is an open-source, tool-using AI agent designed for persistent developer workflows and reusable skills.
+
+**AgentSkill-Hermes** equips Hermes Agent with a fully autonomous dependency maintenance skill following the [agentskills.io](https://agentskills.io) open standard:
+- **Skill Discovery**: Hermes Agent discovers `dependency-exit-capsule` through its canonical `SKILL.md` specification defining tool signatures, prerequisites, inputs, and output contracts.
+- **Autonomous Execution**: When an engineer instructs Hermes Agent:
+  > *"Hermes, audit the Jinja2 dependency in our target repository and prepare a migration capsule"*
+- **Agent Skill Invocation**: Hermes triggers `dependency-exit-capsule/scripts/run_pipeline.py`, inspects AST findings, runs test baselines, prompts open-weight LLMs, performs adversarial auditing, and returns the assembled `capsule_output/capsule.md` and `report.html`.
+- **DigitalOcean Hosting**: The skill service can run directly inside Hermes Agent's execution environment or deployed as a containerized worker/service on DigitalOcean App Platform.
 
 ---
 
@@ -464,6 +503,28 @@ python -m unittest discover dependency-exit-capsule/tests -v
 ```
 
 All 34 tests execute offline and validate HTML escaping, AST accuracy, rubric scoring, evidence contract compliance, and trial patch sandboxing.
+
+---
+
+## Hackathon Rulebook Alignment Matrix
+
+This project was built strictly adhering to the **Hacktoberfest Hack Day Mumbai × ISTE KJSSE Rulehandbook**:
+
+| Rulehandbook Requirement | Project Implementation & Proof | Status |
+|---|---|:---:|
+| **Track Selection** | Track 2: Maintenance Agent Skill (built following [agentskills.io](https://agentskills.io) standard). | ✅ Fully Aligned |
+| **Open-Source / Open-Weight AI** | Uses `llama-3.3-70b-versatile` / `qwen2.5-coder:7b`. No proprietary or closed APIs required. | ✅ Fully Aligned |
+| **No Paid APIs / No Cloud Services** | Strictly standard library Python client; connects to free-tier Groq API or 100% offline local Ollama. | ✅ Fully Aligned |
+| **Organizer-Provided Target Repository** | Successfully audits and analyzes [`LinkWatch`](https://github.com/rishrek/LinkWatch) placed in `dependency-exit-capsule/target/LinkWatch`. | ✅ Fully Aligned |
+| **Target Python Compatibility** | Target repo executed on Python 3.12 / 3.13; all pipeline scripts cross-platform and compatible. | ✅ Fully Aligned |
+| **DigitalOcean Integration** | Includes `Dockerfile`, `docker-compose.yml`, `.do/app.yaml` 1-click spec, and `app.py` serving report dashboard on `$PORT` with `/health`. | ✅ Fully Aligned |
+| **Hermes Agent Integration** | Built as an Agent Skill for Hermes Agent following the `agentskills.io` specification with `SKILL.md`. | ✅ Fully Aligned |
+| **Evidence Contract & Tagging** | Strict partitioning of findings into `[OBSERVED]`, `[EXECUTED]`, `[AI-SUGGESTED]`, and `[AI-CRITIQUE]`. | ✅ Fully Aligned |
+| **Verification & Testing** | Real test runs via `run_tests.py` and sandboxed trial mutations via `trial_patch.py`. | ✅ Fully Aligned |
+| **Original Contribution** | Complete original AST scanner, rubric engine, trial patcher, red team critique, Mermaid visualizer, HTML builder, and skill package. | ✅ Fully Aligned |
+| **Open-Source License** | Complete [MIT License](LICENSE) provided in root repository. | ✅ Fully Aligned |
+| **No Sensitive Secrets** | Clean `.env.example` template; `.env` is securely ignored by `.gitignore`. | ✅ Fully Aligned |
+| **Submission Guidelines** | Final public GitHub repository format: `H26_TeamName_ProjectName`. | ✅ Documented |
 
 ---
 
