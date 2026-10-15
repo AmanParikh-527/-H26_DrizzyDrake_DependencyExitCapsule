@@ -278,7 +278,18 @@ def ground(analysis: dict, evidence: dict) -> dict:
 # --------------------------------------------------------------------------- #
 def run(args) -> dict:
     evidence = json.loads(Path(args.evidence).read_text(encoding="utf-8"))
-    if args.baseline and Path(args.baseline).exists():
+    if isinstance(evidence.get("dependency"), dict):
+        evidence["dependency"] = evidence["dependency"].get("name")
+    if getattr(args, "metadata", None) and Path(args.metadata).exists():
+        meta_data = json.loads(Path(args.metadata).read_text(encoding="utf-8"))
+        if not evidence.get("dependency") and meta_data.get("dependency"):
+            evidence["dependency"] = meta_data["dependency"].get("name")
+        if not evidence.get("version") and meta_data.get("dependency"):
+            evidence["version"] = meta_data["dependency"].get("current_version")
+        evidence["metadata"] = meta_data.get("metadata", meta_data)
+        if "risk_indicators" in meta_data and not evidence.get("risk_indicators"):
+            evidence["risk_indicators"] = meta_data["risk_indicators"]
+    if getattr(args, "baseline", None) and Path(args.baseline).exists():
         evidence["test_baseline"] = json.loads(Path(args.baseline).read_text(encoding="utf-8"))
 
     user_prompt = build_user_prompt(evidence)
@@ -344,16 +355,36 @@ def run(args) -> dict:
         "analysis": analysis,
         "grounding": ground(analysis, evidence) if analysis else None,
     }
-    if analysis is None:
-        result["raw_response_excerpt"] = raw[:1000]
+    if analysis:
+        rec = analysis.get("recommended_replacement", {})
+        rec_name = rec.get("name", "") if isinstance(rec, dict) else str(rec)
+        result.update(
+            model_used=result["model"]["name"],
+            problem_summary=analysis.get("problem_summary", ""),
+            recommended_approach=rec_name,
+            migration_steps=[
+                f"Step {s.get('step', i+1)}: {s.get('action', '')} ({', '.join(s.get('files', []))})"
+                if isinstance(s, dict) else str(s)
+                for i, s in enumerate(analysis.get("migration_steps", []))
+            ],
+            code_changes=[
+                {"file": m.get("notes", "code"), "description": m.get("notes", ""), "before": m.get("old", ""), "after": m.get("new", "")}
+                for m in analysis.get("api_mapping", [])
+            ],
+            estimated_effort=analysis.get("confidence", "medium"),
+            risks=[r.get("risk", str(r)) if isinstance(r, dict) else str(r) for r in analysis.get("risks", [])],
+            suggested_tests=[t.get("test", str(t)) if isinstance(t, dict) else str(t) for t in analysis.get("suggested_tests", [])],
+            tag="[AI-SUGGESTED]",
+        )
     return result
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--evidence", required=True, help="evidence.json from scan_usage/collect_metadata")
+    p.add_argument("--metadata", help="optional metadata_report.json from collect_metadata.py")
     p.add_argument("--baseline", help="optional tests_baseline.json from run_tests.py")
-    p.add_argument("--out", default="out/ai_analysis.json")
+    p.add_argument("--output", "--out", dest="out", default="out/ai_analysis.json")
     # Smart auto-detection of provider/model/base_url based on available environment
     default_provider = os.environ.get("DEC_PROVIDER")
     default_model = os.environ.get("DEC_MODEL")
@@ -395,6 +426,10 @@ def main():
             args.base_url = "https://api.groq.com/openai/v1"
         else:
             args.base_url = "http://localhost:8000/v1"
+
+    if args.base_url and "api.groq.com" in args.base_url:
+        if args.model in ("qwen2.5-coder:7b", "qwen2.5-coder", "llama-3.3-70b-versatile", "default"):
+            args.model = "qwen/qwen3.8-27b"
 
     result = run(args)
     out = Path(args.out)

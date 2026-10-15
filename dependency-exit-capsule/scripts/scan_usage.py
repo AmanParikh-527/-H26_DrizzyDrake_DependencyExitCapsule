@@ -50,15 +50,18 @@ def scan_python(module: str, lines: List[str]) -> Optional[List[Tuple[int, str, 
 
     aliases: Set[str] = set()
     hits: List[Tuple[int, str, str]] = []
+    mod_lower = module.lower()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for item in node.names:
-                if item.name == module or item.name.startswith(f"{module}."):
+                item_name_lower = item.name.lower()
+                if item_name_lower == mod_lower or item_name_lower.startswith(f"{mod_lower}."):
                     alias = item.asname or item.name.split(".", maxsplit=1)[0]
                     aliases.add(alias)
                     hits.append((node.lineno, "import", item.name))
         elif isinstance(node, ast.ImportFrom) and node.module:
-            if node.module == module or node.module.startswith(f"{module}."):
+            node_mod_lower = node.module.lower()
+            if node_mod_lower == mod_lower or node_mod_lower.startswith(f"{mod_lower}."):
                 for item in node.names:
                     aliases.add(item.asname or item.name)
                 hits.append((node.lineno, "import", f"from {node.module}"))
@@ -109,9 +112,9 @@ def scan_config(dependency: str, lines: List[str]) -> List[Tuple[int, str, str]]
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", required=True, type=Path)
-    parser.add_argument("--dep", required=True)
+    parser.add_argument("--dep", "--dependency", dest="dep", required=True)
     parser.add_argument("--import-name")
-    parser.add_argument("--out", default="evidence/usage.json", type=Path)
+    parser.add_argument("--out", "--output", dest="out", default="evidence/usage.json", type=Path)
     args = parser.parse_args()
 
     root = args.repo.resolve()
@@ -128,7 +131,7 @@ def main() -> None:
             limitations.append(f"{path.relative_to(root)}: unreadable file")
             continue
 
-        relative = str(path.relative_to(root))
+        relative = str(path.relative_to(root)).replace("\\", "/")
         if path.suffix == ".py":
             scanned += 1
             hits = scan_python(module, lines)
@@ -150,9 +153,11 @@ def main() -> None:
                     "file": relative,
                     "line": line_number,
                     "kind": kind,
+                    "type": kind,
                     "snippet": lines[line_number - 1].strip()[:200],
                     "symbol": symbol,
                     "evidence": "OBSERVED",
+                    "evidence_tag": "OBSERVED",
                 }
             )
 
@@ -164,17 +169,31 @@ def main() -> None:
         ]
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    sorted_usages = sorted(usages, key=lambda item: (str(item["file"]), int(item["line"])))
+    affected_files = sorted(set(u["file"] for u in sorted_usages))
     result = {
-        "dependency": args.dep,
+        "dependency": {
+            "name": args.dep,
+            "source_files": affected_files,
+        },
+        "usages": sorted_usages,
+        "summary": {
+            "total_usages": len(sorted_usages),
+            "files_affected": len(affected_files),
+            "files_scanned": scanned,
+        },
         "scan": {
             "files_scanned": scanned,
-            "usage_count": len(usages),
-            "usages": sorted(usages, key=lambda item: (str(item["file"]), int(item["line"]))),
+            "usage_count": len(sorted_usages),
+            "usages": sorted_usages,
             "limitations": limitations,
         },
+        "additional_findings": [],
+        "tag": "[OBSERVED]",
+        "evidence_tag": "OBSERVED",
     }
     args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(f"Found {len(usages)} usages in {scanned} files -> {args.out}")
+    print(f"Found {len(sorted_usages)} usages in {scanned} files -> {args.out}")
 
 
 if __name__ == "__main__":

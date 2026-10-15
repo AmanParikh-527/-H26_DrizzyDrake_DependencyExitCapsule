@@ -130,10 +130,15 @@ def parse(output: str, framework: str | None) -> tuple[dict, list[str], str]:
 # --------------------------------------------------------------------------- #
 def cmd_run(args) -> int:
     repo = Path(args.repo).resolve()
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    log_path = out_dir / f"tests_{args.label}.log"
-    json_path = out_dir / f"tests_{args.label}.json"
+    if str(args.out_dir).endswith(".json"):
+        json_path = Path(args.out_dir)
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path = json_path.with_suffix(".log")
+    else:
+        out_dir = Path(args.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        log_path = out_dir / f"tests_{args.label}.log"
+        json_path = out_dir / f"tests_{args.label}.json"
 
     framework, command = (args.framework, args.cmd) if args.cmd else detect(repo)
     result = {
@@ -176,10 +181,32 @@ def cmd_run(args) -> int:
     else:
         status = "error"  # non-zero exit with no failures parsed: likely a crash/setup problem
 
+    if str(args.out_dir).endswith(".json"):
+        json_path = Path(args.out_dir)
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path = json_path.with_suffix(".log")
+    else:
+        out_dir = Path(args.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        log_path = out_dir / f"tests_{args.label}.log"
+        json_path = out_dir / f"tests_{args.label}.json"
+
     result.update(
-        status=status, exit_code=exit_code, duration_seconds=duration, counts=counts,
-        failed_tests=failed, parse_confidence=conf if counts["total"] else "none",
-        log_path=str(log_path), output_tail=output.strip()[-1500:],
+        status=status,
+        exit_code=exit_code,
+        duration_seconds=duration,
+        total=counts["total"],
+        passed=counts["passed"],
+        failed=counts["failed"],
+        errors=counts["errors"],
+        skipped=counts["skipped"],
+        counts=counts,
+        failed_tests=failed,
+        parse_confidence=conf if counts["total"] else "none",
+        log_path=str(log_path),
+        output_tail=output.strip()[-1500:],
+        raw_output=output[:10000],
+        tag="[EXECUTED]",
     )
     json_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(f"[run_tests] {args.label}: status={status} exit={exit_code} "
@@ -232,6 +259,9 @@ def cmd_compare(args) -> int:
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] not in ("run", "compare", "-h", "--help"):
+        sys.argv.insert(1, "run")
+
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="action", required=True)
 
@@ -240,13 +270,13 @@ def main():
     r.add_argument("--label", default="baseline", help="baseline | after | anything")
     r.add_argument("--cmd", help="override the auto-detected test command")
     r.add_argument("--framework", help="parser hint when using --cmd (pytest, jest, go, ...)")
-    r.add_argument("--out-dir", default="out")
+    r.add_argument("--output", "--out", "--out-dir", dest="out_dir", default="out")
     r.add_argument("--timeout", type=int, default=900)
 
     c = sub.add_parser("compare", help="compare two runs")
     c.add_argument("--before", required=True)
     c.add_argument("--after", required=True)
-    c.add_argument("--out", default="out/tests_compare.json")
+    c.add_argument("--output", "--out", dest="out", default="out/tests_compare.json")
 
     args = p.parse_args()
     sys.exit(cmd_run(args) if args.action == "run" else cmd_compare(args))
