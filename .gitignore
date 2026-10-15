@@ -1,8 +1,17 @@
-target/
-out/
+# Byte-compiled / optimized / cache
 __pycache__/
+*.py[cod]
 *.pyc
+*.class
+.pytest_cache/
+
+# Environments and Secrets
 .env
 .env.local
 .venv/
 
+# Build & Run Artifacts
+target/
+out/
+capsule_output/
+intermediate/
