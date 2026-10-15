@@ -1,9 +1,15 @@
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.build_report import build_html
+# Support running from root or elsewhere
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.build_report import build_html, main
 
 
 class ReportTests(unittest.TestCase):
@@ -26,14 +32,50 @@ class ReportTests(unittest.TestCase):
         self.assertIn("&lt;unsafe&gt;&amp;", html)
         self.assertNotIn("<unsafe>&", html)
 
+    def test_report_renders_full_pipeline_capsule(self):
+        capsule_data = {
+            "capsule_version": "1.0.0",
+            "target_dependency": "Jinja2",
+            "sections": {
+                "dependency_details": {
+                    "value": {"name": "Jinja2", "current_version": "2.11.3"}
+                },
+                "risk_indicators": {
+                    "value": [
+                        {"indicator": "Strict pin", "severity": "medium", "evidence": "requirements.txt"}
+                    ]
+                },
+                "usage_locations": {
+                    "value": [
+                        {"file": "app.py", "line": 10, "kind": "import", "snippet": "import jinja2"}
+                    ]
+                },
+                "test_results": {
+                    "value": {"passed": 10, "failed": 0, "skipped": 0, "command": "pytest"}
+                },
+                "ai_analysis": {
+                    "value": {
+                        "problem_summary": "Jinja2 2.11 is outdated.",
+                        "recommended_approach": "upgrade to 3.1.4",
+                        "migration_steps": ["Step 1: update pyproject.toml"],
+                        "risks": ["Breaking syntax"],
+                    }
+                },
+            },
+        }
+        html = build_html(capsule_data)
+        self.assertIn("Jinja2", html)
+        self.assertIn("2.11.3", html)
+        self.assertIn("app.py", html)
+        self.assertIn("10/10", html)
+        self.assertIn("upgrade to 3.1.4", html)
+
     def test_report_cli_writes_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             capsule = root / "capsule.json"
             output = root / "nested" / "report.html"
             capsule.write_text(json.dumps({"dependency": "demo"}), encoding="utf-8")
-            from scripts.build_report import main
-            import sys
 
             original = sys.argv
             try:

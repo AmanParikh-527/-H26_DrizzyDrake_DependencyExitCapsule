@@ -85,7 +85,105 @@ def donut(passed: int, failed: int, skipped: int) -> str:
     )
 
 
+def normalize_capsule_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize capsule data from either Member A contract or full pipeline capsule format."""
+    if not isinstance(data, dict):
+        return {}
+    if "sections" in data and isinstance(data["sections"], dict):
+        sections = data["sections"]
+
+        dep_details = as_dict(as_dict(sections.get("dependency_details")).get("value"))
+        dep_name = data.get("target_dependency") or dep_details.get("name") or data.get("dependency", "")
+        version = dep_details.get("current_version") or data.get("version", "")
+
+        usages_val = as_dict(sections.get("usage_locations")).get("value")
+        usages = as_list(usages_val) if isinstance(usages_val, list) else []
+        scan = {
+            "usage_count": len(usages),
+            "usages": usages,
+            "limitations": as_list(as_dict(sections.get("gaps_and_limitations")).get("value")),
+        }
+
+        risk_val = as_dict(sections.get("risk_indicators")).get("value")
+        risk_indicators = as_list(risk_val) if isinstance(risk_val, list) else []
+        formatted_indicators = []
+        high_count, med_count = 0, 0
+        for ind in risk_indicators:
+            if isinstance(ind, dict):
+                lvl = ind.get("severity") or ind.get("level") or "LOW"
+                lvl_upper = str(lvl).upper()
+                if "HIGH" in lvl_upper:
+                    high_count += 1
+                elif "MED" in lvl_upper:
+                    med_count += 1
+                formatted_indicators.append({
+                    "name": ind.get("indicator") or ind.get("name") or "",
+                    "level": lvl_upper,
+                    "reason": ind.get("evidence") or ind.get("reason") or "",
+                })
+        overall_risk = "HIGH" if high_count > 0 else ("MEDIUM" if med_count > 0 else "LOW")
+        risk = {
+            "overall": overall_risk,
+            "indicators": formatted_indicators,
+        }
+
+        test_sec = as_dict(sections.get("test_results") or sections.get("test_suite_status"))
+        tests_val = test_sec.get("value") if "value" in test_sec else test_sec
+        tests_dict = as_dict(tests_val)
+        baseline = as_dict(tests_dict.get("baseline")) if "baseline" in tests_dict else tests_dict
+        tests = {"baseline": baseline}
+
+        ai_sec = as_dict(sections.get("ai_analysis"))
+        ai_val = ai_sec.get("value") if "value" in ai_sec else ai_sec
+        ai_dict = as_dict(ai_val)
+        ai_analysis = {
+            "summary": ai_dict.get("problem_summary") or ai_dict.get("summary", ""),
+            "replacement": ai_dict.get("recommended_approach") or ai_dict.get("replacement", "n/a"),
+            "steps": ai_dict.get("migration_steps") or ai_dict.get("steps", []),
+            "risks": ai_dict.get("risks") or ai_dict.get("potential_risks", []),
+        }
+
+        gaps_val = sections.get("gaps")
+        if isinstance(gaps_val, dict):
+            gaps_val = gaps_val.get("value", [])
+        gaps = as_list(gaps_val)
+
+        unres_val = sections.get("unresolved_concerns") or sections.get("unresolved")
+        if isinstance(unres_val, dict):
+            unres_val = unres_val.get("value", [])
+        unresolved = []
+        for u in as_list(unres_val):
+            if isinstance(u, dict) and "value" in u:
+                unresolved.append(u["value"])
+            elif u:
+                unresolved.append(str(u))
+
+        pipeline = data.get("pipeline")
+        if not pipeline:
+            pipeline = [
+                {"name": "Scan Usage", "status": "done", "duration": "OBSERVED"},
+                {"name": "Collect Metadata", "status": "done", "duration": "OBSERVED"},
+                {"name": "Test Suite", "status": "done", "duration": "EXECUTED"},
+                {"name": "AI Analysis", "status": "done", "duration": "AI-SUGGESTED"},
+                {"name": "Build Capsule", "status": "done", "duration": "TAGGED"},
+            ]
+
+        return {
+            "dependency": dep_name,
+            "version": version,
+            "scan": scan,
+            "risk": risk,
+            "tests": tests,
+            "ai_analysis": ai_analysis,
+            "gaps": gaps,
+            "unresolved": unresolved,
+            "pipeline": pipeline,
+        }
+    return data
+
+
 def build_html(data: Dict[str, Any]) -> str:
+    data = normalize_capsule_data(data)
     scan = as_dict(data.get("scan"))
     risk = as_dict(data.get("risk"))
     ai = as_dict(data.get("ai_analysis"))
