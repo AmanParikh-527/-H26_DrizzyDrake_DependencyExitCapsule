@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """run_pipeline.py - Orchestrates the dependency-exit-capsule pipeline.
 
 Runs all five scripts in sequence:
@@ -110,7 +110,7 @@ def main():
     test_json = os.path.join(intermediate, "test_results.json")
     ai_json = os.path.join(intermediate, "ai_analysis.json")
 
-    total_steps = 5
+    total_steps = 6
     if args.skip_ai:
         total_steps -= 1
     if args.skip_tests:
@@ -200,6 +200,23 @@ def main():
     capsule_ok = run_step(step, total_steps, "Building capsule...",
                            capsule_cmd, dry_run=args.dry_run)
 
+    # Step 6: Build visual HTML report
+    step += 1
+    report_script = str(SCRIPTS_DIR / "build_report.py")
+    capsule_json_file = os.path.join(output_dir, "capsule.json")
+    report_html_file = os.path.join(output_dir, "report.html")
+    report_ok = False
+    if (capsule_ok or args.dry_run) and os.path.isfile(report_script):
+        report_cmd = [
+            python, report_script,
+            "--capsule", capsule_json_file,
+            "--out", report_html_file,
+        ]
+        report_ok = run_step(step, total_steps, "Building visual HTML report...",
+                             report_cmd, dry_run=args.dry_run)
+    else:
+        print("\n%s Skipping visual report (capsule.json not created)." % timestamp())
+
     # Summary
     print("\n" + "=" * 60)
     print("Pipeline Summary")
@@ -207,12 +224,18 @@ def main():
     for name, ok in results.items():
         status = "OK" if ok else ("SKIPPED" if args.dry_run else "FAILED/SKIPPED")
         print("  %-12s %s" % (name, status))
-        capsule_status = "SKIPPED (dry run)" if args.dry_run else ("OK" if capsule_ok else "FAILED")
+    capsule_status = "SKIPPED (dry run)" if args.dry_run else ("OK" if capsule_ok else "FAILED")
     print("  %-12s %s" % ("capsule", capsule_status))
+    report_status = "SKIPPED (dry run)" if args.dry_run else ("OK" if report_ok else "FAILED/SKIPPED")
+    print("  %-12s %s" % ("html_report", report_status))
     print("=" * 60)
 
     if capsule_ok:
         print("\nCapsule written to: %s" % output_dir)
+        print("  - capsule.json  (structured machine-readable)")
+        print("  - capsule.md    (tagged markdown)")
+        if report_ok:
+            print("  - report.html   (interactive visual report)")
         sys.exit(0)
     elif args.dry_run:
         print("\nDry run complete. No files were created.")

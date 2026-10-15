@@ -1,12 +1,22 @@
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.risk_indicators import main as risk_main
-from scripts.risk_indicators import major
-from scripts.risk_indicators import release_age_days
-from scripts.scan_usage import scan_python, scan_text
+SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+SKILL_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = SKILL_DIR.parent
+for p in (SCRIPTS_DIR, SKILL_DIR, REPO_ROOT):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
+
+try:
+    from scripts.risk_indicators import main as risk_main, major, release_age_days
+    from scripts.scan_usage import scan_python, scan_text
+except ImportError:
+    from risk_indicators import main as risk_main, major, release_age_days
+    from scan_usage import scan_python, scan_text
 
 
 class PipelineTests(unittest.TestCase):

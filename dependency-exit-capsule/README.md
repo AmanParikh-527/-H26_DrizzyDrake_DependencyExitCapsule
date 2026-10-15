@@ -1,4 +1,4 @@
-﻿# 🔍 Dependency Exit Capsule
+# 🔍 Dependency Exit Capsule
 
 > An AI-powered Agent Skill that identifies dependency maintenance problems, analyses migration paths, and generates evidence-tagged reports separating verified facts from AI recommendations.
 
@@ -36,12 +36,14 @@ dependency-exit-capsule/
 │   ├── json-contract.md              # Inter-script JSON pipeline contract
 │   └── risk-rubric.md                # Quantitative scoring rubric for dependency risks
 ├── scripts/
-│   ├── run_pipeline.py               # Orchestrator for all 5 pipeline stages
+│   ├── run_pipeline.py               # Orchestrator for all 6 pipeline stages
 │   ├── scan_usage.py                 # AST/regex code usage analyzer (Member A)
 │   ├── collect_metadata.py           # PyPI and package metadata collector (Member A)
+│   ├── risk_indicators.py            # Risk indicators rule evaluation (Member A)
 │   ├── run_tests.py                  # Pytest runner and output parser (Member B)
 │   ├── ai_analyze.py                 # Open-weight LLM reasoning bridge (Member B)
-│   └── build_capsule.py              # Capsule generator (JSON + Markdown) (Member C)
+│   ├── build_capsule.py              # Capsule generator (JSON + Markdown) (Member C)
+│   └── build_report.py               # Interactive visual HTML report generator
 └── examples/
     └── sample-capsule.md             # Ground-truth report for LinkWatch (Pydantic v1→v2)
 ```

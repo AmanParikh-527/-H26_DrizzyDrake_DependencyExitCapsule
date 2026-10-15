@@ -1,4 +1,4 @@
-﻿---
+---
 name: dependency-exit-capsule
 description: >
   Analyses a Python repository for dependency version conflicts, API
@@ -130,12 +130,21 @@ structured migration plan, code changes, effort estimate, and risks.
 
 Assembles all intermediate outputs into the final Dependency Exit Capsule.
 
+### Step 6 -- Build Visual HTML Report
+
+    python scripts/build_report.py --capsule capsule_output/capsule.json --out capsule_output/report.html
+
+**Produces:** `capsule_output/report.html`
+
+Builds an offline, self-contained interactive visual HTML report with SVG test results chart, usage hotspots, risk indicator matrix, search filter, and evidence legends.
+
 ## Outputs
 
 | File | Format | Description |
 |---|---|---|
 | `capsule.json` | JSON | Machine-readable capsule with tagged evidence |
 | `capsule.md` | Markdown | Human-readable capsule for review and handoff |
+| `report.html` | HTML | Self-contained, offline interactive visual report |
 
 ## Evidence Tagging Protocol
 
