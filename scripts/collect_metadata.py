@@ -110,6 +110,7 @@ def main() -> None:
     parser.add_argument("--dep", required=True)
     parser.add_argument("--ecosystem", choices=("pypi", "npm"), required=True)
     parser.add_argument("--out", default="evidence/metadata.json", type=Path)
+    parser.add_argument("--offline", action="store_true", help="Record registry collection as skipped")
     args = parser.parse_args()
 
     result = {
@@ -117,7 +118,8 @@ def main() -> None:
         "ecosystem": args.ecosystem,
         "declared": declared_version(args.repo, args.dep),
         "local": local_installed(args.dep) if args.ecosystem == "pypi" else None,
-        "registry": pypi_info(args.dep) if args.ecosystem == "pypi" else npm_info(args.dep),
+        "registry": ({"source": "not-collected", "error": "Registry lookup skipped (--offline)"}
+                     if args.offline else pypi_info(args.dep) if args.ecosystem == "pypi" else npm_info(args.dep)),
         "evidence": "OBSERVED",
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
