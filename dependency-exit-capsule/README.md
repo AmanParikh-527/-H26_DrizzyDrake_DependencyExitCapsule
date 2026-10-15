@@ -40,6 +40,11 @@ dependency-exit-capsule/
 │   ├── scan_usage.py                 # AST/regex code usage analyzer (Member A)
 │   ├── collect_metadata.py           # PyPI and package metadata collector (Member A)
 │   ├── risk_indicators.py            # Risk indicators rule evaluation (Member A)
+│   ├── analyze_migration.py          # Migration recommendation engine (Member A)
+│   ├── red_team.py                   # Independent AI plan critique/auditor (Member A)
+│   ├── trial_patch.py                # Disposable repository trial patching (Member A)
+│   ├── generate_diagram.py           # Mermaid blast radius diagram generator (Member A)
+│   ├── license_check.py              # License compatibility and risk screening (Member A)
 │   ├── run_tests.py                  # Pytest runner and output parser (Member B)
 │   ├── ai_analyze.py                 # Open-weight LLM reasoning bridge (Member B)
 │   ├── build_capsule.py              # Capsule generator (JSON + Markdown) (Member C)
@@ -67,14 +72,11 @@ dependency-exit-capsule/
 Run the full end-to-end pipeline against the target repository:
 
 ```bash
-# 1. Clone LinkWatch (target repo) if not already cloned
-git clone https://github.com/rishrek/LinkWatch.git ../LinkWatch
+# 1. Target repo LinkWatch is already located in the target folder:
+#    target/LinkWatch
 
-# 2. Navigate to dependency-exit-capsule
-cd dependency-exit-capsule
-
-# 3. Run the orchestration pipeline
-python scripts/run_pipeline.py --repo ../LinkWatch --dependency pydantic --output ./capsule_output
+# 2. Run the orchestration pipeline:
+python scripts/run_pipeline.py --repo target/LinkWatch --dependency pydantic --output ../capsule_output
 ```
 
 Inspect the generated artifacts in `./capsule_output/`:

@@ -1,0 +1,23 @@
+name: dependency-exit-capsule
+region: nyc
+services:
+  - name: web
+    github:
+      branch: Aman
+      deploy_on_push: true
+    dockerfilePath: Dockerfile
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 10
+      period_seconds: 15
+      timeout_seconds: 5
+      failure_threshold: 3
+    envs:
+      - key: PORT
+        value: "8080"
+      - key: GROQ_API_KEY
+        scope: RUN_TIME
+        type: SECRET

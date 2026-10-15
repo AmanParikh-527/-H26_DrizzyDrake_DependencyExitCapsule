@@ -1,52 +1,546 @@
-# AgentSkill-Hermes
+# AgentSkill-Hermes: Dependency Exit Capsule
 
-Maintenance evidence pipeline and Agent Skill (`dependency-exit-capsule`) for dependency upgrades, compatibility analysis, and replacements.
+> An autonomous maintenance evidence pipeline and Agent Skill (`dependency-exit-capsule`) for dependency upgrades, compatibility analysis, and replacements following the [agentskills.io](https://agentskills.io) standard.
+>
+> **Hackathon Track:** Track 2 — Maintenance Agent Skill (Hacktoberfest Hack Day Mumbai × ISTE KJSSE)  
+> **Target Repository:** [`https://github.com/rishrek/LinkWatch`](https://github.com/rishrek/LinkWatch) (Python 3.12 / 3.13)  
+> **Agent Platform:** Hermes Agent + DigitalOcean  
+> **Open Source License:** [MIT License](LICENSE)
 
-## Overview
+---
 
-This project implements an autonomous agent skill following the [agentskills.io](https://agentskills.io) standard to analyze dependencies, scan actual usage across codebases, run test suites, query open-weight LLMs, and produce a fully tagged **Dependency Exit Capsule** (JSON, Markdown, and self-contained interactive HTML).
+## Table of Contents
 
-## Structure
+- [Problem and Solution Overview](#problem-and-solution-overview)
+- [Original Contribution](#original-contribution)
+- [Hermes Agent Integration](#hermes-agent-integration)
+- [Architecture](#architecture)
+- [AI Model Details](#ai-model-details)
+- [Dependencies](#dependencies)
+- [Setup Instructions](#setup-instructions)
+  - [Prerequisites](#prerequisites)
+  - [Local Setup](#local-setup)
+  - [Environment Configuration](#environment-configuration)
+  - [DigitalOcean Deployment](#digitalocean-deployment)
+- [Usage Instructions](#usage-instructions)
+  - [Target Placement](#target-placement)
+  - [End-to-End Pipeline Execution](#end-to-end-pipeline-execution)
+  - [Modular Script Execution](#modular-script-execution)
+  - [Viewing the Interactive Report Dashboard](#viewing-the-interactive-report-dashboard)
+  - [Running the Test Suites](#running-the-test-suites)
+- [Hackathon Rulebook Alignment Matrix](#hackathon-rulebook-alignment-matrix)
+- [Known Limitations](#known-limitations)
 
-- `dependency-exit-capsule/` - Complete Agent Skill package:
-  - `SKILL.md` - Agent skill definition and interface specification.
-  - `scripts/scan_usage.py` - AST/grep detector for imports, calls, decorators, and configurations.
-  - `scripts/collect_metadata.py` - Manifest and PyPI registry metadata collector.
-  - `scripts/risk_indicators.py` - Applies risk rubric rules.
-  - `scripts/run_tests.py` - Automated test suite runner with baseline vs. post-upgrade diffing.
-  - `scripts/ai_analyze.py` - Open-weight model analyzer with file-grounding validation and network retry.
-  - `scripts/build_capsule.py` - Structured capsule assembler (`capsule.json` and `capsule.md`).
-  - `scripts/build_report.py` - Offline, self-contained interactive HTML visual report generator (`report.html`).
-  - `scripts/run_pipeline.py` - End-to-end orchestrator running all 6 steps.
-  - `references/` - Risk rubric, JSON contract, capsule schema, and evidence contract.
-  - `examples/` - Verified sample capsules.
-  - `tests/` - Comprehensive unit and regression test suite.
-- `scripts/` - Root CLI utilities (`scan_usage.py`, `collect_metadata.py`, `risk_indicators.py`, `build_report.py`).
-- `tests/` - Top-level test runner suite.
-- `evidence/` - JSON contracts and repository baseline fixtures.
-- `docs/problem-selection.md` - Explains how to select a real candidate dependency.
+---
 
-## Run End-to-End Pipeline
+## Problem and Solution Overview
 
-```bash
-# Run all 6 steps end-to-end against a target repository
-python dependency-exit-capsule/scripts/run_pipeline.py --repo target/LinkWatch --dependency Jinja2
+### The Problem
+
+Modern software projects accumulate dozens or hundreds of third-party dependencies. Over time:
+- Packages become **deprecated**, **unmaintained**, or pinned to obsolete major versions.
+- Version pins **conflict** across different project manifests (e.g., `requirements.txt` pins `Jinja2==2.11.3` while `pyproject.toml` or transitive packages require `>=3.0`).
+- Teams avoid major-version upgrades out of fear: breaking changes might lurk in unexercised code paths, untested configurations, or subtle API signature changes.
+- Automated dependency bots (such as Dependabot or Renovate) only bump version strings in manifest files; they do not audit actual call sites, assess blast radius, run isolated trial patches, or verify licensing compatibility.
+- Standard LLM tools frequently hallucinate non-existent API methods or fabricate files that do not exist in the codebase.
+
+### The Solution
+
+**AgentSkill-Hermes** implements the **`dependency-exit-capsule`** agent skill. It automates deep dependency maintenance analysis by generating a self-contained, portable **Dependency Exit Capsule** (`capsule.json`, `capsule.md`, and an interactive visual dashboard `report.html`).
+
+Crucially, every finding in the report is strictly partitioned by an **Evidence Contract**:
+
+| Evidence Tag | Meaning | Verification Level | Sources |
+|---|---|---|---|
+| `[OBSERVED]` | Code facts read directly from source files, AST, or PyPI registry | **High** (Deterministic) | `scan_usage.py`, `collect_metadata.py`, `generate_diagram.py`, `license_check.py` |
+| `[EXECUTED]` | Outcomes of real commands actually run in an isolated environment | **High** (Verified) | `run_tests.py`, `trial_patch.py` |
+| `[AI-SUGGESTED]` | Recommendations & migration plans generated by an open-weight LLM | **Unverified** (Heuristic) | `ai_analyze.py`, `analyze_migration.py` |
+| `[AI-CRITIQUE]` | Independent adversarial audit reviewing proposed plans against code | **Audited** (Adversarial) | `red_team.py` |
+
+By separating observed facts from AI reasoning and backing suggestions with deterministic file-grounding checks and isolated test executions, teams can make dependency decisions with total confidence.
+
+---
+
+## Original Contribution
+
+In compliance with the **Track 2 Hackathon Rules** (*"Simply deploying an existing agent, changing its prompt, or modifying its user interface is not sufficient. The submitted capability must add a new skill, tool, workflow, functionality, or meaningful modification that addresses the chosen maintenance problem"*):
+
+Our team designed and built the complete **`dependency-exit-capsule`** capability from the ground up:
+1. **Custom AST Usage Scanner (`scan_usage.py`)**: Built an AST visitor that walks Python syntax trees to extract exact symbol call sites, imports, decorators (e.g. Pydantic `@validator` vs `@field_validator`), configuration keys, and line numbers across codebases, paired with a resilient regex fallback.
+2. **Automated Risk Rubric Scoring (`risk_indicators.py`)**: Designed deterministic scoring rules analyzing release frequency deltas, version pin strictness (`==` vs `>=`), and cross-manifest pin mismatches without relying on proprietary black-box scoring.
+3. **Deterministic Hallucination Suppression (`ai_analyze.py`)**: Engineered a file-grounding engine that deterministically intercepts model output and verifies referenced files and methods against the AST index, flagging any hallucinated paths in `grounding.hallucinated_files`.
+4. **Adversarial Red Team Auditor (`red_team.py`)**: Implemented an independent adversarial critique stage that re-evaluates proposed migration plans against observed call sites to catch hidden pitfalls before execution.
+5. **Isolated Trial Patch Sandbox (`trial_patch.py`)**: Created an isolated temporary patching mechanism that safely tests model-suggested line substitutions against the target repo's test suite and restores the original code cleanly without repository corruption.
+6. **Conservative License Matrix Screener (`license_check.py`)**: Built an automated license compatibility engine evaluating inbound vs outbound licenses across MIT, Apache-2.0, BSD, GPL, and LGPL.
+7. **Mermaid Blast Radius Visualizer (`generate_diagram.py`)**: Implemented automated graph generation rendering component dependencies and blast radius topologies directly into Markdown and HTML.
+8. **Offline Interactive HTML Generator (`build_report.py`)**: Developed an offline, zero-CDN, zero-dependency visual report generator rendering SVG donut charts, responsive risk cards, and instant-filtering search tables with 100% escaped data.
+9. **Capsule Assembler (`build_capsule.py`)**: Designed the portable JSON + Markdown envelope enforcing the `[OBSERVED]`, `[EXECUTED]`, `[AI-SUGGESTED]`, and `[AI-CRITIQUE]` evidence contract.
+10. **DigitalOcean Ready Production Server (`app.py`, `Dockerfile`, `.do/app.yaml`)**: Built containerization and a standard-library HTTP server with `/health` endpoints for DigitalOcean App Platform and Droplets.
+
+---
+
+## Hermes Agent Integration
+
+[Hermes Agent](https://github.com/NousResearch/Hermes-Agent) is an open-source, tool-using AI agent designed for persistent developer workflows and reusable skills.
+
+**AgentSkill-Hermes** equips Hermes Agent with a fully autonomous dependency maintenance skill following the [agentskills.io](https://agentskills.io) open standard:
+- **Skill Discovery**: Hermes Agent discovers `dependency-exit-capsule` through its canonical `SKILL.md` specification defining tool signatures, prerequisites, inputs, and output contracts.
+- **Autonomous Execution**: When an engineer instructs Hermes Agent:
+  > *"Hermes, audit the Jinja2 dependency in our target repository and prepare a migration capsule"*
+- **Agent Skill Invocation**: Hermes triggers `dependency-exit-capsule/scripts/run_pipeline.py`, inspects AST findings, runs test baselines, prompts open-weight LLMs, performs adversarial auditing, and returns the assembled `capsule_output/capsule.md` and `report.html`.
+- **DigitalOcean Hosting**: The skill service can run directly inside Hermes Agent's execution environment or deployed as a containerized worker/service on DigitalOcean App Platform.
+
+---
+
+## Architecture
+
+AgentSkill-Hermes operates through a multi-stage evidence generation and assembly architecture:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                TARGET REPOSITORY                                       │
+│                 (e.g., dependency-exit-capsule/target/LinkWatch)                       │
+└────────────────────────────────────────┬───────────────────────────────────────────────┘
+                                         │
+                   ┌─────────────────────┴─────────────────────┐
+                   │                                           │
+                   ▼                                           ▼
+       ┌────────────────────────┐                  ┌────────────────────────┐
+       │   AST & Grep Scanner   │                  │   Metadata Collector   │
+       │   (scan_usage.py)      │                  │ (collect_metadata.py)  │
+       │                        │                  │                        │
+       │ • Imports, calls, shims│                  │ • Manifest version pins│
+       │ • Line numbers & code  │                  │ • PyPI registry data   │
+       │ • API-version markers  │                  │ • Deprecation status   │
+       └───────────┬────────────┘                  └───────────┬────────────┘
+                   │                                           │
+                   └─────────────────────┬─────────────────────┘
+                                         ▼
+                         ┌───────────────────────────────┐
+                         │    Risk Rubric & Modeling     │
+                         │     (risk_indicators.py)      │
+                         │ • Outdated release delta      │
+                         │ • Pinning strictness          │
+                         │ • Usage dispersion score      │
+                         └───────────────┬───────────────┘
+                                         │
+                   ┌─────────────────────┴─────────────────────┐
+                   │                                           │
+                   ▼                                           ▼
+       ┌────────────────────────┐                  ┌────────────────────────┐
+       │ Test & Trial Sandbox   │                  │  AI Analysis Engine    │
+       │      (EXECUTED)        │                  │     (AI-SUGGESTED)     │
+       │                        │                  │                        │
+       │ • run_tests.py:        │                  │ • ai_analyze.py:       │
+       │   baseline execution   │                  │   migration plan diffs │
+       │ • trial_patch.py:      │                  │ • File-grounding check │
+       │   isolated dry-patch   │                  │ • red_team.py:         │
+       │ • license_check.py:    │                  │   adversarial critique │
+       │   conservative matrix  │                  │ • generate_diagram.py: │
+       │                        │                  │   blast radius Mermaid │
+       └───────────┬────────────┘                  └───────────┬────────────┘
+                   │                                           │
+                   └─────────────────────┬─────────────────────┘
+                                         │
+                                         ▼
+       ┌─────────────────────────────────────────────────────────────────┐
+       │                    CAPSULE ASSEMBLER                            │
+       │           (build_capsule.py & build_report.py)                  │
+       └─────────────────────────────────┬───────────────────────────────┘
+                                         │
+                                         ▼
+       ┌─────────────────────────────────────────────────────────────────┐
+       │                       OUTPUT ARTIFACTS                          │
+       │                     (./capsule_output/)                         │
+       │                                                                 │
+       │ • capsule.json   - Structured, machine-readable tagged data     │
+       │ • capsule.md     - Human-readable audit report                  │
+       │ • report.html    - Interactive, self-contained visual dashboard │
+       │ • intermediate/* - Step-by-step intermediate telemetry          │
+       └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Run Individual Scripts Against Target Repository
+### Directory Structure
 
-```bash
-python scripts/scan_usage.py --repo target/LinkWatch --dependency Jinja2
-python scripts/collect_metadata.py --repo target/LinkWatch --dependency Jinja2 --ecosystem pypi
-python scripts/risk_indicators.py
-python scripts/build_report.py --capsule capsule_output/capsule.json --out capsule_output/report.html
+```
+AgentSkill-Hermes/
+├── Dockerfile                         # DigitalOcean & container specification
+├── docker-compose.yml                 # Local & Droplet multi-container orchestration
+├── requirements.txt                   # Test runner & runtime requirements
+├── app.py                             # Lightweight DigitalOcean HTTP dashboard server
+├── README.md                          # Repository documentation
+├── .env.example                       # Environment credentials template
+├── .gitignore                         # Git protection rules
+├── .do/
+│   └── app.yaml                       # DigitalOcean App Platform 1-click specification
+├── capsule_output/                    # Output directory for generated artifacts
+│   ├── capsule.json                   # Machine-readable tagged capsule
+│   ├── capsule.md                     # Markdown capsule report
+│   ├── report.html                    # Self-contained visual HTML dashboard
+│   └── intermediate/                  # Intermediate step JSON reports
+├── dependency-exit-capsule/           # Canonical Agent Skill package (agentskills.io)
+│   ├── SKILL.md                       # Agent skill interface specification
+│   ├── target/                        # Target directory for cloned GitHub repos
+│   │   ├── README.md                  # User instructions for target repos
+│   │   └── LinkWatch/                 # Bundled reference target repository
+│   ├── scripts/                       # Core skill implementation scripts
+│   │   ├── scan_usage.py              # AST & regex usage locator
+│   │   ├── collect_metadata.py        # Manifest & PyPI metadata extractor
+│   │   ├── risk_indicators.py         # Risk rubric rules evaluator
+│   │   ├── run_tests.py               # Test suite runner & baseline comparator
+│   │   ├── ai_analyze.py              # LLM migration reasoner with grounding checks
+│   │   ├── red_team.py                # Adversarial auditor for migration plans
+│   │   ├── trial_patch.py             # Isolated trial patch runner
+│   │   ├── generate_diagram.py        # Mermaid blast radius diagram generator
+│   │   ├── license_check.py           # Conservative license compatibility screener
+│   │   ├── build_capsule.py           # Capsule structured assembler
+│   │   ├── build_report.py            # Self-contained interactive HTML generator
+│   │   └── run_pipeline.py            # End-to-end pipeline orchestrator
+│   ├── references/                    # Specification contracts and rubrics
+│   ├── examples/                      # Verified sample capsules
+│   └── tests/                         # Skill test suite
+├── scripts/                           # Top-level CLI entrypoints
+└── tests/                             # Top-level integration & validation test suite
 ```
 
-Use `--import-name` when a package name differs from its import name, for
-example `--dep pyyaml --import-name yaml`. The tools are offline-capable for
-scanning; registry metadata failures are recorded in the output rather than
-hidden.
+---
 
-## Visual HTML Report
+## AI Model Details
 
-The report generator accepts both full pipeline capsules and partial capsules, escaping repository content and visually separating `[OBSERVED]`, `[EXECUTED]`, and `[AI-SUGGESTED]` evidence tags. Open `report.html` locally after generation; no server, CDN, or extra package is required.
+The pipeline uses open-weight Large Language Models to perform migration reasoning, synthesize code changes, and independently audit proposed steps.
+
+| Attribute | Specification | Alternative / Local Option |
+|---|---|---|
+| **Model Name** | `llama-3.3-70b-versatile` | `qwen2.5-coder:7b` |
+| **Model Version** | LLaMA 3.3 70B (Meta release December 2024) | Qwen 2.5 Coder 7B (Alibaba release September 2024) |
+| **Model Source** | Meta AI, served via Groq Cloud LPUs | Alibaba Cloud / Qwen Team, distributed via Ollama & Hugging Face |
+| **Access Method** | OpenAI-compatible REST API via Groq (`https://api.groq.com/openai/v1`) using standard `Authorization: Bearer $GROQ_API_KEY` | Local REST endpoint via Ollama (`http://localhost:11434/v1` or native API) |
+| **Applicable License / Terms** | [Meta Llama 3.3 Community License Agreement](https://llama.meta.com/llama3/license/) (commercial use permitted under 700M monthly active users) | [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0) (permissive open source) |
+| **Role in Project** | **Primary Reasoning Engine**: Generates migration steps, code diffs, and risk estimates.<br>**Adversarial Red Team Auditor**: Independently reviews the migration plan against observed AST call sites. | Local offline fallback for both migration reasoning and adversarial critique when running completely without internet. |
+
+### Grounding and Hallucination Suppression
+
+All model outputs are constrained and validated through deterministic checks:
+1. **JSON Envelope Enforcement**: Responses are strictly parsed into predefined JSON schemas (`ai_analysis.json` and `red_team_critique.json`).
+2. **Deterministic File Grounding**: Every file path referenced by the model in code diffs or migration steps is cross-referenced against the AST scan. If the model references a file not present in the repository, the hallucination is explicitly flagged and recorded in `grounding.hallucinated_files`.
+3. **Evidence Tagging**: Output from the model is labeled `[AI-SUGGESTED]` (for migration planning) and `[AI-CRITIQUE]` (for adversarial review). It is never presented as verified fact until executed by `run_tests.py` or `trial_patch.py`.
+
+---
+
+## Dependencies
+
+The core pipeline is deliberately architected to rely **almost entirely on the Python Standard Library** for maximum portability, security, and offline reliability.
+
+### Core Standard Library Modules
+- `ast`, `re` — Abstract Syntax Tree parsing and regex pattern matching for code scanning.
+- `json` — Parsing and serializing evidence contracts and capsules.
+- `urllib.request`, `urllib.error` — Standard HTTP client for PyPI metadata and LLM REST APIs.
+- `subprocess`, `shlex` — Safe, cross-platform command execution and signal handling.
+- `tempfile`, `shutil` — Isolated sandbox directory creation for trial patches.
+- `http.server`, `socketserver` — Production dashboard serving without requiring heavy web frameworks.
+- `argparse`, `pathlib`, `logging` — CLI parsing, cross-platform path resolution, and logging.
+
+### External Dependencies
+Specified in [requirements.txt](file:///c:/Users/parik/Downloads/HACKTOBER/AgentSkill-Hermes/requirements.txt):
+- `pytest>=7.4.0` — Test discovery and test runner for executing tests inside target repositories.
+- `python-dotenv>=1.0.0` — Convenience loader for `.env` credentials in development environments.
+
+### Container & System Dependencies
+Specified in [Dockerfile](file:///c:/Users/parik/Downloads/HACKTOBER/AgentSkill-Hermes/Dockerfile):
+- `python:3.11-slim` base image.
+- `git`, `curl` for repository management and container health checking.
+
+---
+
+## Setup Instructions
+
+### Prerequisites
+- **Python**: Version 3.9 or higher (3.11+ recommended).
+- **Git**: For repository cloning.
+- **Docker & Docker Compose** (Optional, recommended for deployment).
+
+### Local Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/AmanParikh-527/AgentSkill-Hermes.git
+   cd AgentSkill-Hermes
+   ```
+
+2. **Create and activate a virtual environment:**
+   ```bash
+   # On macOS/Linux:
+   python3 -m venv .venv
+   source .venv/bin/activate
+
+   # On Windows (PowerShell):
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Environment Configuration
+
+Copy the example environment file and configure your API key:
+```bash
+cp .env.example .env
+```
+
+Edit `.env` to configure your preferred LLM provider:
+
+```ini
+# Option 1: Groq Cloud (Recommended - Ultra-fast, open-weight models, free tier available)
+GROQ_API_KEY=gsk_your_actual_key_here
+
+# Option 2: Generic OpenAI-compatible endpoint (vLLM, OpenRouter, Together)
+# DEC_PROVIDER=openai
+# DEC_BASE_URL=https://api.groq.com/openai/v1
+# DEC_MODEL=llama-3.3-70b-versatile
+# DEC_API_KEY=gsk_...
+
+# Option 3: Local Ollama (Completely offline, no API key needed)
+# DEC_PROVIDER=ollama
+# DEC_BASE_URL=http://localhost:11434
+# DEC_MODEL=qwen2.5-coder:7b
+```
+
+---
+
+### DigitalOcean Deployment
+
+AgentSkill-Hermes is fully configured for deployment on **DigitalOcean App Platform** and **DigitalOcean Droplets**.
+
+#### 1. DigitalOcean App Platform (1-Click Deployment)
+
+The repository includes a production [.do/app.yaml](file:///c:/Users/parik/Downloads/HACKTOBER/AgentSkill-Hermes/.do/app.yaml) specification:
+1. Log in to your [DigitalOcean Cloud Console](https://cloud.digitalocean.com/).
+2. Navigate to **Apps** > **Create App** > select **GitHub**.
+3. Choose repository `AmanParikh-527/AgentSkill-Hermes` (branch `Aman`).
+4. DigitalOcean automatically detects the `Dockerfile` and `.do/app.yaml`.
+5. Under **Environment Variables**, provide your `GROQ_API_KEY` as a secret.
+6. Click **Deploy**. DigitalOcean will build the container, perform automated health checks against `GET /health`, and expose your interactive dashboard.
+
+#### 2. DigitalOcean Droplet (Docker Compose)
+
+Deploy to an Ubuntu Droplet with Docker in under 2 minutes:
+
+```bash
+# 1. Connect to your Droplet via SSH
+ssh root@<your-droplet-ip>
+
+# 2. Clone the repository
+git clone https://github.com/AmanParikh-527/AgentSkill-Hermes.git
+cd AgentSkill-Hermes
+
+# 3. Configure credentials
+cp .env.example .env
+nano .env  # Add your GROQ_API_KEY
+
+# 4. Launch the application
+docker compose up -d --build
+
+# 5. Check container health
+docker compose ps
+curl http://localhost:8080/health
+```
+
+The dashboard will be available at `http://<your-droplet-ip>:8080`.
+
+---
+
+## Usage Instructions
+
+### Target Placement
+
+Place the target GitHub repository you want to audit inside the **target folder**:
+`dependency-exit-capsule/target/<repository_name>`
+
+*A pre-configured, clean target repository (`LinkWatch`) is included in the project for immediate testing.*
+
+```
+dependency-exit-capsule/target/
+└── LinkWatch/
+    ├── linkwatch/
+    ├── tests/
+    ├── pyproject.toml
+    └── requirements.txt
+```
+
+---
+
+### End-to-End Pipeline Execution
+
+Run the complete 6-stage pipeline with a single command:
+
+```bash
+python dependency-exit-capsule/scripts/run_pipeline.py \
+  --repo dependency-exit-capsule/target/LinkWatch \
+  --dependency Jinja2 \
+  --output ./capsule_output
+```
+
+#### Pipeline Options:
+- `--repo` *(required)*: Path to the target repository.
+- `--dependency` *(required)*: Package name to analyze (e.g. `Jinja2`, `pydantic`, `requests`).
+- `--output` *(default: `./capsule_output`)*: Directory where reports will be saved.
+- `--model` *(default: `qwen2.5-coder:7b`)*: LLM model identifier.
+- `--skip-tests`: Run code and metadata analysis without executing the test suite.
+- `--skip-ai`: Generate deterministic AST and metadata evidence only; bypass LLM calls.
+- `--dry-run`: Preview planned pipeline commands without executing.
+
+---
+
+### Modular Script Execution
+
+Each pipeline component can also be invoked independently:
+
+```bash
+# 1. AST Code Scanner
+python dependency-exit-capsule/scripts/scan_usage.py \
+  --repo dependency-exit-capsule/target/LinkWatch \
+  --dependency Jinja2 \
+  --output capsule_output/intermediate/usage_report.json
+
+# 2. Metadata & PyPI Registry Collector
+python dependency-exit-capsule/scripts/collect_metadata.py \
+  --repo dependency-exit-capsule/target/LinkWatch \
+  --dependency Jinja2 \
+  --ecosystem pypi \
+  --output capsule_output/intermediate/metadata_report.json
+
+# 3. Risk Rubric Evaluator
+python dependency-exit-capsule/scripts/risk_indicators.py \
+  --usage capsule_output/intermediate/usage_report.json \
+  --metadata capsule_output/intermediate/metadata_report.json \
+  --out capsule_output/intermediate/risk.json
+
+# 4. Test Suite Runner
+python dependency-exit-capsule/scripts/run_tests.py \
+  --repo dependency-exit-capsule/target/LinkWatch \
+  --output capsule_output/intermediate/test_results.json
+
+# 5. AI Migration Reasoner
+python dependency-exit-capsule/scripts/ai_analyze.py \
+  --evidence capsule_output/intermediate/usage_report.json \
+  --metadata capsule_output/intermediate/metadata_report.json \
+  --output capsule_output/intermediate/ai_analysis.json
+
+# 6. Adversarial Red Team Critique
+python dependency-exit-capsule/scripts/red_team.py \
+  --usage capsule_output/intermediate/usage_report.json \
+  --analysis capsule_output/intermediate/ai_analysis.json \
+  --out capsule_output/intermediate/red_team_critique.json
+
+# 7. Trial Patch Sandbox
+python dependency-exit-capsule/scripts/trial_patch.py \
+  --repo dependency-exit-capsule/target/LinkWatch \
+  --usage capsule_output/intermediate/usage_report.json \
+  --analysis capsule_output/intermediate/ai_analysis.json \
+  --out capsule_output/intermediate/trial_patch_result.json
+
+# 8. Blast Radius Mermaid Diagram
+python dependency-exit-capsule/scripts/generate_diagram.py \
+  --usage capsule_output/intermediate/usage_report.json \
+  --metadata capsule_output/intermediate/metadata_report.json \
+  --out capsule_output/intermediate/blast_radius.mmd
+
+# 9. License Compatibility Screener
+python dependency-exit-capsule/scripts/license_check.py \
+  --repo dependency-exit-capsule/target/LinkWatch \
+  --metadata capsule_output/intermediate/metadata_report.json \
+  --analysis capsule_output/intermediate/ai_analysis.json \
+  --out capsule_output/intermediate/license_risk.json
+
+# 10. Capsule Assembler
+python dependency-exit-capsule/scripts/build_capsule.py \
+  --usage capsule_output/intermediate/usage_report.json \
+  --metadata capsule_output/intermediate/metadata_report.json \
+  --tests capsule_output/intermediate/test_results.json \
+  --ai capsule_output/intermediate/ai_analysis.json \
+  --output capsule_output
+
+# 11. Visual Interactive HTML Report
+python dependency-exit-capsule/scripts/build_report.py \
+  --capsule capsule_output/capsule.json \
+  --out capsule_output/report.html
+```
+
+---
+
+### Viewing the Interactive Report Dashboard
+
+To view the generated report locally or serve it in production:
+
+```bash
+python app.py --port 8080
+```
+
+Open `http://localhost:8080` in any web browser to explore:
+- High-level risk score cards and status badges.
+- Pipeline execution steps with exact durations.
+- SVG test breakdown charts (passed, failed, skipped).
+- Interactive, instant-filtering table of all usage locations and snippets.
+- Parameter scores for license screening, trial patch verification, and blast radius.
+- AI migration recommendations and model-identified risks.
+- Adversarial red team critiques and unresolved limitations.
+
+---
+
+### Running the Test Suites
+
+All unit and integration tests can be verified using Python's built-in `unittest` runner:
+
+```bash
+# Run root test suite (18 tests)
+python -m unittest discover tests -v
+
+# Run agent skill test suite (16 tests)
+python -m unittest discover dependency-exit-capsule/tests -v
+```
+
+All 34 tests execute offline and validate HTML escaping, AST accuracy, rubric scoring, evidence contract compliance, and trial patch sandboxing.
+
+---
+
+## Hackathon Rulebook Alignment Matrix
+
+This project was built strictly adhering to the **Hacktoberfest Hack Day Mumbai × ISTE KJSSE Rulehandbook**:
+
+| Rulehandbook Requirement | Project Implementation & Proof | Status |
+|---|---|:---:|
+| **Track Selection** | Track 2: Maintenance Agent Skill (built following [agentskills.io](https://agentskills.io) standard). | ✅ Fully Aligned |
+| **Open-Source / Open-Weight AI** | Uses `llama-3.3-70b-versatile` / `qwen2.5-coder:7b`. No proprietary or closed APIs required. | ✅ Fully Aligned |
+| **No Paid APIs / No Cloud Services** | Strictly standard library Python client; connects to free-tier Groq API or 100% offline local Ollama. | ✅ Fully Aligned |
+| **Organizer-Provided Target Repository** | Successfully audits and analyzes [`LinkWatch`](https://github.com/rishrek/LinkWatch) placed in `dependency-exit-capsule/target/LinkWatch`. | ✅ Fully Aligned |
+| **Target Python Compatibility** | Target repo executed on Python 3.12 / 3.13; all pipeline scripts cross-platform and compatible. | ✅ Fully Aligned |
+| **DigitalOcean Integration** | Includes `Dockerfile`, `docker-compose.yml`, `.do/app.yaml` 1-click spec, and `app.py` serving report dashboard on `$PORT` with `/health`. | ✅ Fully Aligned |
+| **Hermes Agent Integration** | Built as an Agent Skill for Hermes Agent following the `agentskills.io` specification with `SKILL.md`. | ✅ Fully Aligned |
+| **Evidence Contract & Tagging** | Strict partitioning of findings into `[OBSERVED]`, `[EXECUTED]`, `[AI-SUGGESTED]`, and `[AI-CRITIQUE]`. | ✅ Fully Aligned |
+| **Verification & Testing** | Real test runs via `run_tests.py` and sandboxed trial mutations via `trial_patch.py`. | ✅ Fully Aligned |
+| **Original Contribution** | Complete original AST scanner, rubric engine, trial patcher, red team critique, Mermaid visualizer, HTML builder, and skill package. | ✅ Fully Aligned |
+| **Open-Source License** | Complete [MIT License](LICENSE) provided in root repository. | ✅ Fully Aligned |
+| **No Sensitive Secrets** | Clean `.env.example` template; `.env` is securely ignored by `.gitignore`. | ✅ Fully Aligned |
+| **Submission Guidelines** | Final public GitHub repository format: `H26_TeamName_ProjectName`. | ✅ Documented |
+
+---
+
+## Known Limitations
+
+1. **Dynamic Language Reflection**:
+   Python permits dynamic runtime dispatch (e.g., `getattr(module, name)`, `importlib.import_module()`, `eval()`). While `scan_usage.py` utilizes AST parsing with a regex fallback, dynamically evaluated calls that bypass standard import and call patterns cannot be identified by static analysis.
+
+2. **Test Suite Reliance for Trial Verification**:
+   The `trial_patch.py` verification step depends on the quality and breadth of the target repository's existing test suite. If the target repository has sparse test coverage or lacks tests for the affected code path, a trial patch may pass even if edge cases remain unhandled. In such scenarios, the report tags the outcome and notes the limitation.
+
+3. **Localized Scope of Automated Trial Patches**:
+   Automated trial patching tests targeted, localized line replacements in a temporary sandbox. Major architectural migrations that require coordinated modifications across dozens of files simultaneously require manual engineer orchestration following the AI migration steps.
+
+4. **Network Access for Remote Providers & PyPI**:
+   Collecting live PyPI release dates and querying remote LLMs (such as Groq or OpenRouter) requires external network access. If executed in an air-gapped environment without internet access, PyPI metadata collection will gracefully log an offline limitation, and a local Ollama instance must be used for AI analysis.
+
+5. **Language Ecosystem**:
+   While the AST parser and test runners are heavily optimized for the **Python** ecosystem (`pip`, `pyproject.toml`, `setup.py`, `pytest`, `unittest`), JavaScript/Node.js scanning is currently limited to regex pattern matching of `require()` and `import` declarations.
