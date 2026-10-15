@@ -1,0 +1,14 @@
+{
+  "dependency": "requests",
+  "scan": {
+    "files_scanned": 0,
+    "usage_count": 0,
+    "usages": [],
+    "limitations": [
+      "No dependency manifest or source files exist in the current repository",
+      "Dynamic imports, eval, and runtime-generated module names are not detected",
+      "Re-exports and wrapper modules are not traced"
+    ]
+  },
+  "evidence": "OBSERVED"
+}
